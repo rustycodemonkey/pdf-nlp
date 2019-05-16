@@ -1,3 +1,5 @@
+#!/home/philk/.virtualenvs/pdf-nlp/bin/python
+
 import sys
 #import glob
 import pdfminer.settings
