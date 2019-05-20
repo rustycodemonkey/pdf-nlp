@@ -1,15 +1,16 @@
 #!/home/philk/.virtualenvs/pdf-nlp/bin/python
 
 import sys
-#import glob
+# import glob
 import pdfminer.settings
 import pdfminer.high_level
 import pdfminer.layout
-from pdfminer.image import ImageWriter
+import io
+import re
 pdfminer.settings.STRICT = False
 
 
-def extract_text(parameters=[], outfile='-',
+def extract_text(inputfiles=[], outfile='-',
             _py2_no_more_posargs=None,  # Bloody Python2 needs a shim
             no_laparams=False, all_texts=None, detect_vertical=None, # LAParams
             word_margin=None, char_margin=None, line_margin=None, boxes_flow=None, # LAParams
@@ -19,7 +20,7 @@ def extract_text(parameters=[], outfile='-',
             disable_caching=False, **other):
     if _py2_no_more_posargs is not None:
         raise ValueError("Too many positional arguments passed.")
-    if not parameters:
+    if not inputfiles:
         raise ValueError("Must provide files to work upon!")
 
     # If any LAParams group arguments were passed, create an LAParams object and
@@ -33,36 +34,53 @@ def extract_text(parameters=[], outfile='-',
     else:
         laparams = None
 
-    imagewriter = None
-    if output_dir:
-        imagewriter = ImageWriter(output_dir)
+    outfp = io.StringIO()
 
-    if output_type == "text" and outfile != "-":
-        for override, alttype in (  (".htm", "html"),
-                                    (".html", "html"),
-                                    (".xml", "xml"),
-                                    (".tag", "tag") ):
-            if outfile.endswith(override):
-                output_type = alttype
-
-    if outfile == "-":
-        outfp = sys.stdout
-        if outfp.encoding is not None:
-            codec = 'utf-8'
-    else:
-        outfp = open(outfile, "wb")
-
-    print(parameters['files'])
-
-    for fname in parameters['files']:
+    # print(locals())
+    for fname in inputfiles['files']:
         with open(fname, "rb") as fp:
             pdfminer.high_level.extract_text_to_fp(fp, **locals())
-    return outfp
+    return outfp.getvalue()
+
+
+def store_text(input_text):
+    paragraph_headings = ['Investment objective', 'Investment strategy', 'Performance review', 'Market review',
+                          'Outlook']
+    data_to_store = dict()
+
+    input_lines = input_text.splitlines()
+
+    # Get document date
+    for line in input_lines:
+        if line.startswith('Monthly factsheet'):
+            print(re.search('(0[1-9]|[12][0-9]|3[01])[ ]'
+                            '(January|February|March|April|May|June|July|August|September|October|November|December)'
+                            '[ ](19|20)\d\d$', line)[0])
+
+            data_to_store['doc_date'] = re.search('(0[1-9]|[12][0-9]|3[01])[ ]'
+                                                  '(January|February|March|April|May|June|July'
+                                                  '|August|September|October|November|December)'
+                                                  '[ ](19|20)\d\d$', line)[0]
+            # Stop once you get the first one
+            break
+
+    # Check if any heading found
+    for line in input_lines:
+        if line in paragraph_headings:
+            print(line)
+
+
+    # data to store
+    print(data_to_store)
+
 
 def main(args=None):
-    # parameters = {'files': glob.glob("data/*.pdf")}
-    parameters = {'files': ['data/active_index_income_fund.pdf']}
-    extract_text(parameters)
+    # inputfiles = {'files': glob.glob("data/*.pdf")}
+    inputfiles = {'files': ['data/active_index_income_fund.pdf']}
+    extracted_text = extract_text(inputfiles)
+    cleaned_text = re.sub(r'\n\s*\n', '\n\n', extracted_text)
+    print(cleaned_text.splitlines())
+    store_text(extracted_text)
 
 if __name__ == '__main__':
     sys.exit(main())
