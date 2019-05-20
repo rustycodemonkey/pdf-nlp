@@ -7,11 +7,11 @@ import pdfminer.high_level
 import pdfminer.layout
 import io
 import re
+from itertools import tee
 pdfminer.settings.STRICT = False
 
-
-def extract_text(inputfiles=[], outfile='-',
-            _py2_no_more_posargs=None,  # Bloody Python2 needs a shim
+def extract_text(inputfile=None, outfile='-',
+            _py2_no_more_posargs=None,  # Python2 needs a shim
             no_laparams=False, all_texts=None, detect_vertical=None, # LAParams
             word_margin=None, char_margin=None, line_margin=None, boxes_flow=None, # LAParams
             output_type='text', codec='utf-8', strip_control=False,
@@ -20,8 +20,8 @@ def extract_text(inputfiles=[], outfile='-',
             disable_caching=False, **other):
     if _py2_no_more_posargs is not None:
         raise ValueError("Too many positional arguments passed.")
-    if not inputfiles:
-        raise ValueError("Must provide files to work upon!")
+    if not inputfile:
+        raise ValueError("Must provide an input file")
 
     # If any LAParams group arguments were passed, create an LAParams object and
     # populate with given args. Otherwise, set it to None.
@@ -37,18 +37,39 @@ def extract_text(inputfiles=[], outfile='-',
     outfp = io.StringIO()
 
     # print(locals())
-    for fname in inputfiles['files']:
-        with open(fname, "rb") as fp:
-            pdfminer.high_level.extract_text_to_fp(fp, **locals())
+    with open(inputfile, "rb") as fp:
+        pdfminer.high_level.extract_text_to_fp(fp, **locals())
     return outfp.getvalue()
 
-
 def store_text(input_text):
-    paragraph_headings = ['Investment objective', 'Investment strategy', 'Performance review', 'Market review',
-                          'Outlook']
-    data_to_store = dict()
+    doc_headings = {'Investment objective': 'objective',
+                    'Investment strategy': 'strategy',
+                    'Performance review': 'performance',
+                    'Market review': 'market',
+                    'Outlook': 'outlook'}
+    headings_found = []
+    data_to_store = {'doc_date': '',
+                     'objective': '',
+                     'strategy': '',
+                     'performance': '',
+                     'market': '',
+                     'outlook': ''}
 
     input_lines = input_text.splitlines()
+
+    # for line in input_lines:
+    #     print(line)
+
+    # Check if any heading found
+    for line in input_lines:
+        if line in doc_headings.keys():
+            headings_found.append(line)
+
+    print(headings_found)
+
+    for heading, next_heading in pairwise(headings_found):
+        print(heading, next_heading)
+        data_to_store[doc_headings[heading]] = get_paragraph(heading, next_heading, input_lines)
 
     # Get document date
     for line in input_lines:
@@ -64,23 +85,50 @@ def store_text(input_text):
             # Stop once you get the first one
             break
 
-    # Check if any heading found
-    for line in input_lines:
-        if line in paragraph_headings:
-            print(line)
-
-
     # data to store
     print(data_to_store)
 
+def pairwise(lst):
+    """ yield item i and item i+1 in lst. e.g.
+        (lst[0], lst[1]), (lst[1], lst[2]), ..., (lst[-1], None)
+    """
+    if not lst:
+        return
 
-def main(args=None):
+    for i in range(len(lst)-1):
+        yield lst[i], lst[i+1]
+
+    yield lst[-1], None
+
+def get_paragraph(heading, next_heading, input_lines):
+
+    heading_pos = input_lines.index(heading)
+    print(heading_pos)
+
+    if next_heading is None:
+        paragraph_num_lines = input_lines[heading_pos + 1:].index('')
+        # print(paragraph_num_lines)
+        joined_paragraph = ''.join(input_lines[heading_pos + 1:heading_pos + paragraph_num_lines + 1])
+    else:
+        # TODO: Think about this part more and then code
+        next_heading_pos = input_lines.index(next_heading)
+        print(next_heading_pos)
+        joined_paragraph = ''.join(input_lines[heading_pos + 1:next_heading_pos - 1])
+
+    print(joined_paragraph)
+
+    # TODO: Add other text cleaning smarts here.
+    return joined_paragraph
+
+def main():
+
     # inputfiles = {'files': glob.glob("data/*.pdf")}
     inputfiles = {'files': ['data/active_index_income_fund.pdf']}
-    extracted_text = extract_text(inputfiles)
-    cleaned_text = re.sub(r'\n\s*\n', '\n\n', extracted_text)
-    print(cleaned_text.splitlines())
-    store_text(extracted_text)
+
+    for fname in inputfiles['files']:
+        extracted_text = extract_text(fname)
+        cleaned_text = re.sub(r'\n\s*\n', '\n\n', extracted_text)
+        store_text(cleaned_text)
 
 if __name__ == '__main__':
     sys.exit(main())
